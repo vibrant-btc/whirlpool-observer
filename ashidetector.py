@@ -348,6 +348,7 @@ class WhirlpoolTracer:
 
                 if start_block > tip_height:
                     self.display_stats()
+                    self.refresh_reports()
                     logging.info(f"Caught up to tip. Waiting for {PROCESS_LOOP_DELAY_SECONDS // 3600} hours.")
                     time.sleep(PROCESS_LOOP_DELAY_SECONDS)
                     continue
@@ -398,6 +399,33 @@ class WhirlpoolTracer:
         logging.info("-" * 20)
         logging.info(f"  Total: {total_utxos} UTXOs ({total_btc:.4f} BTC)")
         logging.info("-------------------------------------")
+
+    def refresh_reports(self):
+        """Deletes old generated reports and creates fresh simple and detailed CSV reports."""
+        logging.info("--- Refreshing generated reports ---")
+        os.makedirs(REPORTS_DIR, exist_ok=True)
+
+        deleted_count = 0
+        for filename in os.listdir(REPORTS_DIR):
+            if filename.startswith(("whirlpool_report_", "whirlpool_simplereport_")) and filename.endswith(".csv"):
+                report_path = os.path.join(REPORTS_DIR, filename)
+                try:
+                    os.remove(report_path)
+                    deleted_count += 1
+                    logging.info(f"Deleted old report: {report_path}")
+                except OSError as e:
+                    logging.error(f"Failed to delete old report {report_path}: {e}")
+
+        logging.info(f"Deleted {deleted_count} old report file(s).")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.generate_simple_report(
+            interval=10,
+            output_file=os.path.join(REPORTS_DIR, f"whirlpool_simplereport_{timestamp}.csv")
+        )
+        self.generate_report(
+            interval=1000,
+            output_file=os.path.join(REPORTS_DIR, f"whirlpool_report_{timestamp}.csv")
+        )
 
     def generate_report(self, interval=1000, output_file=None):
         logging.info(f"--- Generating Chart-Ready Time-Series Report (Interval: {interval} blocks) ---")
