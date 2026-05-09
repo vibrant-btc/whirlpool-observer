@@ -1,2 +1,28 @@
 *.agdai
 MAlonzo/**
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+
+# Runtime data
+*.db
+*.sqlite
+*.sqlite3
+whirlpool.db
+/data/*
+!/data/.gitkeep
+/reports/*
+!/reports/.gitkeep
+
+# Generated reports
+whirlpool_report_*.csv
+whirlpool_simplereport_*.csv
+
+# Environment files
+.env

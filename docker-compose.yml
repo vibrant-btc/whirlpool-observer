@@ -1,0 +1,14 @@
+services:
+  ashi-whirlpool:
+    build: .
+    image: ashi-whirlpool-analysis:latest
+    container_name: ashi-whirlpool-analysis
+    restart: unless-stopped
+    init: true
+    environment:
+      WHIRLPOOL_DATA_DIR: /data
+      WHIRLPOOL_REPORTS_DIR: /reports
+    volumes:
+      - ./data:/data
+      - ./reports:/reports
+    command: ["run"]

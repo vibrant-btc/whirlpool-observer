@@ -1,17 +1,17 @@
 import sqlite3
 import requests
 import time
-import json
 import os
 import argparse
 import logging
-from typing import List, Dict, Any, Optional, Tuple
-from collections import Counter
-from datetime import datetime, UTC
-from bitcoin.core import CBlock, CTransaction, CBlockHeader
+from typing import List, Dict, Any, Optional
+from datetime import datetime
+from bitcoin.core import CBlock
 
 # --- Constants ---
-DB_FILE = "whirlpool.db"
+DATA_DIR = os.environ.get("WHIRLPOOL_DATA_DIR", ".")
+REPORTS_DIR = os.environ.get("WHIRLPOOL_REPORTS_DIR", ".")
+DB_FILE = os.environ.get("WHIRLPOOL_DB_FILE", os.path.join(DATA_DIR, "whirlpool.db"))
 API_BASE_URL = "https://blockstream.info/api"
 RETRY_ATTEMPTS = 5
 RETRY_DELAY_SECONDS = 5
@@ -29,10 +29,6 @@ GENESIS_TXS = {
         "txid": "737a867727db9a2c981ad622f2fa14b021ce8b1066a001e34fb793f8da833155",
         "denomination_sats": int(0.025 * SATOSHIS_PER_BTC),
     },
-    "0.0025_BTC_Pool": {
-        "txid": "efe738007ab4cef44f6625531730f2479646c4cc6074bc31bcbf8a6fab0d3979",
-        "denomination_sats": int(0.0025 * SATOSHIS_PER_BTC),
-    },
 }
 
 # Optimization: The block before which no genesis UTXOs were spent.
@@ -49,6 +45,8 @@ class DatabaseManager:
     """Handles all SQLite database operations for Whirlpool lineage tracking."""
     def __init__(self, db_file: str):
         self.db_file = db_file
+        db_dir = os.path.dirname(os.path.abspath(self.db_file))
+        os.makedirs(db_dir, exist_ok=True)
         self.conn = sqlite3.connect(self.db_file, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
@@ -472,6 +470,8 @@ class WhirlpoolTracer:
         """Writes the chart-optimized report data to a CSV file."""
         import csv
         try:
+            output_dir = os.path.dirname(os.path.abspath(filename))
+            os.makedirs(output_dir, exist_ok=True)
             with open(filename, 'w', newline='') as csvfile:
                 writer = csv.DictWriter(csvfile, fieldnames=header)
                 writer.writeheader()
@@ -564,14 +564,14 @@ def main():
     elif args.command == "report":
         tracer = WhirlpoolTracer()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"whirlpool_report_{timestamp}.csv"
+        filename = os.path.join(REPORTS_DIR, f"whirlpool_report_{timestamp}.csv")
         interval = args.interval if args.interval is not None else 1000
         tracer.generate_report(interval=interval, output_file=filename)
         tracer.db_manager.close()
     elif args.command == "simplereport":
         tracer = WhirlpoolTracer()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"whirlpool_simplereport_{timestamp}.csv"
+        filename = os.path.join(REPORTS_DIR, f"whirlpool_simplereport_{timestamp}.csv")
         interval = args.interval if args.interval is not None else 10
         tracer.generate_simple_report(interval=interval, output_file=filename)
         tracer.db_manager.close()
