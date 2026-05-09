@@ -1,8 +1,8 @@
-# Whirlpool Analysis Docker
+# Whirlpool.Observer
 
 Docker-first fork of **Ashi Whirlpool Analysis**, a Python-based tool for tracing Whirlpool CoinJoin transaction lineage on the Bitcoin blockchain.
 
-This fork is intended to run isolated in Docker on a server. It tracks the 0.25 BTC and 0.025 BTC Whirlpool pools, stores scan state in a bind-mounted SQLite database, and automatically refreshes CSV reports and PNG charts when the scanner catches up to the blockchain tip and after each 12-hour recheck.
+Whirlpool.Observer runs isolated in Docker on a server. It tracks the 0.25 BTC and 0.025 BTC Whirlpool pools, stores scan state in a bind-mounted SQLite database, exposes a live pure-black web dashboard, and automatically refreshes CSV reports and PNG charts when the scanner catches up to the blockchain tip and after each configurable recheck interval.
 
 ---
 
@@ -14,15 +14,26 @@ This project is based on the original work by **Ziya Sadr**:
 
 ---
 
+## Repository
+
+Current fork:
+
+* <https://github.com/vibrant-btc/whirlpool-observer>
+
+---
+
 ## How It Works
 
 * **Blockchain Sync:** Fetches Bitcoin transaction and raw block data from a mempool.space-compatible REST API.
 * **Configurable API Source:** Uses the public `https://mempool.space/api` endpoint by default, but can be pointed at any self-hosted mempool.space API URL.
-* **Local Database:** Stores sync progress, Whirlpool transactions, and tracked UTXOs in `./data/whirlpool.db` on the host.
+* **Local Database:** Stores sync progress, Whirlpool transactions, TX0 metadata, tracked UTXOs, and web dashboard data in `./data/whirlpool.db` on the host.
 * **Whirlpool Detection:** Tracks valid 5-input, 5-output Whirlpool-style CoinJoin descendants that spend tracked anonymity-set UTXOs from a single pool.
+* **TX0 Detection:** Inspects non-remix inputs to identify TX0 transactions, premix outputs, coordinator fee outputs, entered capacity, and fee-efficiency stats.
 * **Anonymity Set Tracking:** Marks tracked UTXOs as spent and adds outputs from valid descendant mixes back into the tracked anonymity set.
-* **Automatic Reporting:** Writes refreshed CSV reports to `./reports` whenever the scanner reaches the blockchain tip and after every 12-hour recheck.
+* **Automatic Reporting:** Writes refreshed CSV reports to `./reports` whenever the scanner reaches the blockchain tip and after every recheck.
 * **Automatic Charting:** Writes refreshed PNG charts to `./reports` after report generation. Chart failures are logged and do not stop scanning or CSV report generation.
+* **Live Web UI:** Serves **Whirlpool.Observer** on port `8080` by default, with live charts, sync progress, pool stats, TX0/cycle stats, and Whirlpool transaction browsing.
+* **Social/Favicon Assets:** Serves favicon and social preview images from `./assets`.
 
 ---
 
@@ -50,7 +61,9 @@ The scanner uses these mempool.space-compatible endpoints:
 * `/blocks/tip/height` to get the current chain tip height.
 * `/block-height/:height` to resolve a block height to a block hash.
 * `/block/:hash/raw` to download the complete raw binary block.
-* `/tx/:txid` to fetch the known genesis transaction metadata and outputs.
+* `/tx/:txid` to fetch known genesis transactions and TX0/parent transaction metadata.
+
+Because full raw blocks are downloaded with `/block/:hash/raw`, the 25-transaction pagination limit on `/block/:hash/txs` is not used by this tool.
 
 ---
 
@@ -59,6 +72,7 @@ The scanner uses these mempool.space-compatible endpoints:
 Install these on the host/server:
 
 * Docker
+* Docker Compose
 
 ---
 
@@ -67,9 +81,9 @@ Install these on the host/server:
 Docker Compose bind mounts two host directories into the container:
 
 * `./data` -> `/data`: stores the persistent SQLite database, including `whirlpool.db`.
-* `./reports` -> `/reports`: stores generated CSV report files.
+* `./reports` -> `/reports`: stores generated CSV report and PNG chart files.
 
-These directories are kept outside the container so scan progress and reports survive container rebuilds, restarts, and removals.
+These directories are kept outside the container so scan progress, enriched TX0 metadata, dashboard data, and reports survive container rebuilds, restarts, and removals.
 
 ---
 
@@ -107,22 +121,124 @@ Then start normally with `docker compose up -d`.
 
 ---
 
-## Start Scanning
+## Configure Recheck Interval and Web Port
 
-Run the scanner in the background:
+The scanner rechecks for new blocks every 12 hours by default after it reaches the blockchain tip.
+
+You can change this with `WHIRLPOOL_RESCAN_HOURS`:
+
+```bash
+WHIRLPOOL_RESCAN_HOURS=1 docker compose up -d
+```
+
+The web UI is exposed on host port `8080` by default. Change it with:
+
+```bash
+WHIRLPOOL_WEB_PORT=8081 docker compose up -d
+```
+
+These values can also be placed in `.env`:
+
+```bash
+MEMPOOL_API_URL=https://mymempool.example.com/api
+WHIRLPOOL_RESCAN_HOURS=1
+WHIRLPOOL_WEB_PORT=8081
+```
+
+---
+
+## Optional Tor Onion-Location Header
+
+If you run Whirlpool.Observer behind a Tor hidden service, you can advertise the onion address to Tor Browser by setting `WHIRLPOOL_ONION_LOCATION`.
+
+Example:
+
+```bash
+WHIRLPOOL_ONION_LOCATION=http://exampleexampleexampleexampleexampleexampleexampleexample.onion docker compose up -d
+```
+
+Or add it to `.env`:
+
+```bash
+WHIRLPOOL_ONION_LOCATION=http://exampleexampleexampleexampleexampleexampleexampleexample.onion
+```
+
+When set, every HTTP response includes:
+
+```http
+Onion-Location: http://exampleexampleexampleexampleexampleexampleexampleexample.onion
+```
+
+Leave it unset to disable the header.
+
+---
+
+## Start Scanning and Open Whirlpool.Observer
+
+Run the scanner and web UI in the background:
 
 ```bash
 docker compose up -d
 ```
 
+Open the dashboard in a browser:
+
+```bash
+http://localhost:8080
+```
+
+If running on a server, replace `localhost` with the server IP or hostname.
+
 The container starts the scanner automatically. It resumes from the last processed block stored in `./data/whirlpool.db`.
 
 ---
 
-## View Logs
+## Whirlpool.Observer Web UI
+
+The dashboard provides live, interactive visual analysis while the scanner is running:
+
+* Pure-black dashboard theme.
+* Favicon loaded from `assets/Ashigaru_Whirlpool_Logo_White.png`.
+* Logo displayed next to the Whirlpool.Observer title.
+* Open Graph and Twitter/X social preview cards using `assets/social.png`.
+* Sync/scanning progress without needing to read logs.
+* “Synced to blockheight” state and next update countdown after initial sync.
+* Total unspent capacity.
+* Total entered capacity detected from TX0 premix outputs.
+* Per-pool cycle count, where a cycle means one tracked Whirlpool transaction.
+* Per-pool TX0 count.
+* Total entered capacity by pool graph.
+* Live unspent capacity by pool graph.
+* Total UTXOs entered graph.
+* Total unspent UTXOs graph.
+* Paginated Whirlpool transaction list with pool filtering.
+* Clickable Whirlpool transaction IDs that open `http://am-i.exposed/#tx=<txid>`.
+* Desktop-only TX0 input and fee-efficiency details.
+* Mobile-optimized cycle cards without the extra TX0 detail column.
+* Collapsible reference/FAQ section explaining key terms and calculations.
+
+Existing partially-filled databases are supported. New schema tables are created without deleting existing scan progress, and missing input/TX0 metadata is backfilled from already-discovered Whirlpool transactions before normal scanning continues.
+
+---
+
+## Logs
+
+The embedded web server suppresses per-request HTTP access logs to prevent Docker logs from growing rapidly while the browser refreshes live API data.
+
+Docker Compose also limits container log growth:
+
+```yaml
+logging:
+  driver: "json-file"
+  options:
+    max-size: "64k"
+    max-file: "1"
+```
+
+View logs with:
 
 ```bash
-docker compose logs -f ashi-whirlpool
+docker compose logs -f whirlpool-observer
 ```
 
 ---
@@ -133,7 +249,9 @@ docker compose logs -f ashi-whirlpool
 docker compose stop
 ```
 
-This stops the scanner but keeps the container, database, and reports.
+This stops the scanner and web UI but keeps the container, database, and reports.
+
+The scanner handles `SIGTERM` / `SIGINT` gracefully: it stops between blocks, commits progress, and closes SQLite cleanly.
 
 ---
 
@@ -159,7 +277,7 @@ This removes the container and default Docker network, but it does not delete `.
 
 ## Reports and Charts
 
-Reports and charts are generated automatically by the running scanner.
+Reports and static PNG charts are generated automatically by the running scanner.
 
 When the scanner reaches the current blockchain tip, it will:
 
@@ -168,7 +286,7 @@ When the scanner reaches the current blockchain tip, it will:
 3. Generate a new detailed CSV report.
 4. Generate a new combined pool capacity PNG chart.
 5. Generate a new total unspent UTXO count PNG chart.
-6. Sleep for 12 hours.
+6. Sleep for the configured recheck interval.
 7. Recheck the blockchain tip and repeat the report/chart refresh after it catches up again.
 
 Generated files use these filename patterns:
@@ -178,9 +296,7 @@ Generated files use these filename patterns:
 * `whirlpool_capacity_chart_YYYYMMDD_HHMMSS.png`
 * `whirlpool_utxo_chart_YYYYMMDD_HHMMSS.png`
 
-The capacity chart has block height increasing left-to-right on the x-axis and shows the 0.25 BTC pool and 0.025 BTC pool as separate colored lines on the same chart. The UTXO chart shows total unspent tracked UTXO count over increasing block height.
-
-PNG chart generation is intentionally isolated inside error handling. If chart rendering fails for any reason, the scanner and CSV report refresh continue running.
+The web UI renders interactive charts live from the database and does not depend on these static PNG files.
 
 ---
 
@@ -189,16 +305,19 @@ PNG chart generation is intentionally isolated inside error handling. If chart r
 You can run a one-off stats command through Docker Compose:
 
 ```bash
-docker compose run --rm ashi-whirlpool stats
+docker compose run --rm whirlpool-observer stats
 ```
 
 ---
 
 ## Files Added for Docker
 
-* `Dockerfile`: builds the isolated runtime image.
-* `docker-compose.yml`: defines the service, bind mounts `./data` and `./reports`, and exposes the configurable `MEMPOOL_API_URL` setting.
-* `requirements.txt`: lists runtime dependencies, including `matplotlib` for PNG chart rendering.
+* `Dockerfile`: builds the isolated runtime image and exposes the web UI port.
+* `docker-compose.yml`: defines the service, bind mounts `./data` and `./reports`, maps the web UI port, limits log file growth, and exposes configurable environment variables.
+* `observer.html`: serves the Whirlpool.Observer dashboard UI.
+* `assets/Ashigaru_Whirlpool_Logo_White.png`: favicon, Apple touch icon, and title logo.
+* `assets/social.png`: Open Graph and Twitter/X social preview image.
+* `requirements.txt`: lists runtime dependencies, including `flask` for the web UI and `matplotlib` for PNG chart rendering.
 * `.dockerignore`: keeps local databases, reports, virtualenvs, and cache files out of the Docker build context.
 * `data/.gitkeep`: keeps the persistent data directory in the repository.
 * `reports/.gitkeep`: keeps the report output directory in the repository.
