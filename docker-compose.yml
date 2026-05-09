@@ -1,8 +1,8 @@
 services:
   ashi-whirlpool:
     build: .
-    image: ashi-whirlpool-analysis:latest
-    container_name: ashi-whirlpool-analysis
+    image: whirlpool-analysis:latest
+    container_name: whirlpool-analysis
     restart: unless-stopped
     init: true
     environment:
