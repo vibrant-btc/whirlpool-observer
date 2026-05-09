@@ -1,6 +1,14 @@
 services:
   whirlpool-observer:
-    build: .
+    build:
+      context: .
+      args:
+        # Hardcoded at image build time for absolute social-card metadata.
+        # Set this only when publicly exposing the service.
+        WHIRLPOOL_PUBLIC_URL: ${WHIRLPOOL_PUBLIC_URL:-http://localhost:8080}
+        # Hardcoded at image build time for Tor Browser's Onion-Location header.
+        # Leave empty unless publicly exposing an onion service.
+        WHIRLPOOL_ONION_LOCATION: ${WHIRLPOOL_ONION_LOCATION:-}
     image: whirlpool-observer:latest
     container_name: whirlpool-observer
     restart: unless-stopped
@@ -11,9 +19,6 @@ services:
       WHIRLPOOL_WEB_HOST: 0.0.0.0
       WHIRLPOOL_WEB_PORT: 8080
       WHIRLPOOL_RESCAN_HOURS: ${WHIRLPOOL_RESCAN_HOURS:-12}
-      # Optional Tor Browser Onion-Location header. Leave empty to disable.
-      # Example: http://exampleexampleexampleexampleexampleexampleexampleexample.onion
-      WHIRLPOOL_ONION_LOCATION: ${WHIRLPOOL_ONION_LOCATION:-}
       # Set this to your own self-hosted mempool.space-compatible API URL.
       # Examples: https://mempool.space/api, https://mymempool.example.com/api, http://192.168.1.50:4080/api
       MEMPOOL_API_URL: ${MEMPOOL_API_URL:-https://mempool.space/api}

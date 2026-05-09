@@ -21,7 +21,9 @@ DB_FILE = os.environ.get("WHIRLPOOL_DB_FILE", os.path.join(DATA_DIR, "whirlpool.
 MEMPOOL_API_BASE_URL = os.environ.get("MEMPOOL_API_URL", "https://mempool.space/api").rstrip("/")
 WEB_HOST = os.environ.get("WHIRLPOOL_WEB_HOST", "0.0.0.0")
 WEB_PORT = int(os.environ.get("WHIRLPOOL_WEB_PORT", "8080"))
-ONION_LOCATION = os.environ.get("WHIRLPOOL_ONION_LOCATION", "").strip()
+ONION_LOCATION = "__WHIRLPOOL_ONION_LOCATION__".strip()
+if ONION_LOCATION.startswith("__"):
+    ONION_LOCATION = ""
 RESCAN_INTERVAL_HOURS = float(os.environ.get("WHIRLPOOL_RESCAN_HOURS", "12"))
 PROCESS_LOOP_DELAY_SECONDS = max(int(RESCAN_INTERVAL_HOURS * 60 * 60), 60)
 RETRY_ATTEMPTS = 5
@@ -848,9 +850,7 @@ class WhirlpoolTracer:
         def index():
             template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "observer.html")
             with open(template_path, "r", encoding="utf-8") as template_file:
-                html = template_file.read()
-            base_url = request.url_root.rstrip("/")
-            return html.replace("__BASE_URL__", base_url)
+                return template_file.read()
 
         @app.route("/assets/<path:filename>")
         def assets(filename):

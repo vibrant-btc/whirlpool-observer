@@ -87,6 +87,64 @@ From the repository root:
 docker compose build
 ```
 
+### Public social-card URL (build-time)
+
+Social-card crawlers such as Twitter/X, Facebook, Signal, Telegram, and link preview checkers often require absolute URLs in Open Graph and Twitter card metadata. Whirlpool.Observer therefore bakes the public site URL into [`observer.html`](observer.html) during the Docker image build.
+
+If you are only running locally, the default is fine:
+
+```bash
+WHIRLPOOL_PUBLIC_URL=http://localhost:8080
+```
+
+If you publicly expose Whirlpool.Observer, set the public URL before building:
+
+```bash
+WHIRLPOOL_PUBLIC_URL=https://observer.example.com docker compose build --no-cache
+```
+
+For a persistent setting, add it to [`.env`](.env):
+
+```bash
+WHIRLPOOL_PUBLIC_URL=https://observer.example.com
+```
+
+Then rebuild the image:
+
+```bash
+docker compose build --no-cache
+```
+
+This value is build-time only. If you change it later, rebuild the image before restarting the container.
+
+### Onion-Location header (build-time)
+
+If you run Whirlpool.Observer behind a Tor hidden service, you can also bake in an Onion-Location header at image build time:
+
+```bash
+WHIRLPOOL_ONION_LOCATION=http://exampleexampleexampleexampleexampleexampleexampleexample.onion docker compose build --no-cache
+```
+
+Or add it to [`.env`](.env):
+
+```bash
+WHIRLPOOL_ONION_LOCATION=http://exampleexampleexampleexampleexampleexampleexampleexample.onion
+```
+
+Then rebuild:
+
+```bash
+docker compose build --no-cache
+```
+
+When configured, every HTTP response includes:
+
+```http
+Onion-Location: http://exampleexampleexampleexampleexampleexampleexampleexample.onion
+```
+
+Leave `WHIRLPOOL_ONION_LOCATION` empty to disable this header. This is also build-time only; rebuild the image after changing it.
+
 ---
 
 ## Configure a Self-Hosted mempool.space API
@@ -137,33 +195,6 @@ WHIRLPOOL_RESCAN_HOURS=1
 WHIRLPOOL_WEB_PORT=8081
 ```
 
----
-
-## Optional Tor Onion-Location Header
-
-If you run Whirlpool.Observer behind a Tor hidden service, you can advertise the onion address to Tor Browser by setting `WHIRLPOOL_ONION_LOCATION`.
-
-Example:
-
-```bash
-WHIRLPOOL_ONION_LOCATION=http://exampleexampleexampleexampleexampleexampleexampleexample.onion docker compose up -d
-```
-
-Or add it to `.env`:
-
-```bash
-WHIRLPOOL_ONION_LOCATION=http://exampleexampleexampleexampleexampleexampleexampleexample.onion
-```
-
-When set, every HTTP response includes:
-
-```http
-Onion-Location: http://exampleexampleexampleexampleexampleexampleexampleexample.onion
-```
-
-Leave it unset to disable the header.
-
----
 
 ## Start Scanning and Open Whirlpool.Observer
 
@@ -304,15 +335,15 @@ docker compose run --rm whirlpool-observer stats
 
 ## Files Added for Docker
 
-* `Dockerfile`: builds the isolated runtime image and exposes the web UI port.
-* `docker-compose.yml`: defines the service, bind mounts `./data` and `./reports`, maps the web UI port, limits log file growth, and exposes configurable environment variables.
-* `observer.html`: serves the Whirlpool.Observer dashboard UI.
-* `assets/Ashigaru_Whirlpool_Logo_White.png`: favicon, Apple touch icon, and title logo.
-* `assets/social.png`: Open Graph and Twitter/X social preview image.
-* `requirements.txt`: lists runtime dependencies, including `flask` for the web UI and `matplotlib` for PNG chart rendering.
-* `.dockerignore`: keeps local databases, reports, virtualenvs, and cache files out of the Docker build context.
-* `data/.gitkeep`: keeps the persistent data directory in the repository.
-* `reports/.gitkeep`: keeps the report output directory in the repository.
+* [`Dockerfile`](Dockerfile): builds the isolated runtime image, exposes the web UI port, and bakes `WHIRLPOOL_PUBLIC_URL` / `WHIRLPOOL_ONION_LOCATION` into the image at build time.
+* [`docker-compose.yml`](docker-compose.yml): defines the service, bind mounts [`data`](data) and [`reports`](reports), maps the web UI port, limits log file growth, and exposes configurable environment variables/build args.
+* [`observer.html`](observer.html): serves the Whirlpool.Observer dashboard UI and includes favicon/social-card metadata.
+* [`assets/Ashigaru_Whirlpool_Logo_White.png`](assets/Ashigaru_Whirlpool_Logo_White.png): favicon, Apple touch icon, and title logo.
+* [`assets/social.png`](assets/social.png): Open Graph and Twitter/X social preview image.
+* [`requirements.txt`](requirements.txt): lists runtime dependencies, including `flask` for the web UI and `matplotlib` for PNG chart rendering.
+* [`.dockerignore`](.dockerignore): keeps local databases, reports, virtualenvs, and cache files out of the Docker build context.
+* [`data/.gitkeep`](data/.gitkeep): keeps the persistent data directory in the repository.
+* [`reports/.gitkeep`](reports/.gitkeep): keeps the report output directory in the repository.
 
 ---
 
