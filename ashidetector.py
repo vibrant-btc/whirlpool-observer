@@ -401,22 +401,28 @@ class WhirlpoolTracer:
         logging.info("-------------------------------------")
 
     def refresh_reports(self):
-        """Deletes old generated reports and creates fresh simple and detailed CSV reports."""
-        logging.info("--- Refreshing generated reports ---")
+        """Deletes old generated artifacts and creates fresh CSV reports and PNG charts."""
+        logging.info("--- Refreshing generated reports and charts ---")
         os.makedirs(REPORTS_DIR, exist_ok=True)
 
         deleted_count = 0
+        generated_prefixes = (
+            "whirlpool_report_",
+            "whirlpool_simplereport_",
+            "whirlpool_capacity_chart_",
+            "whirlpool_utxo_chart_",
+        )
         for filename in os.listdir(REPORTS_DIR):
-            if filename.startswith(("whirlpool_report_", "whirlpool_simplereport_")) and filename.endswith(".csv"):
+            if filename.startswith(generated_prefixes) and filename.endswith((".csv", ".png")):
                 report_path = os.path.join(REPORTS_DIR, filename)
                 try:
                     os.remove(report_path)
                     deleted_count += 1
-                    logging.info(f"Deleted old report: {report_path}")
+                    logging.info(f"Deleted old generated artifact: {report_path}")
                 except OSError as e:
-                    logging.error(f"Failed to delete old report {report_path}: {e}")
+                    logging.error(f"Failed to delete old generated artifact {report_path}: {e}")
 
-        logging.info(f"Deleted {deleted_count} old report file(s).")
+        logging.info(f"Deleted {deleted_count} old generated artifact file(s).")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.generate_simple_report(
             interval=10,
@@ -426,6 +432,164 @@ class WhirlpoolTracer:
             interval=1000,
             output_file=os.path.join(REPORTS_DIR, f"whirlpool_report_{timestamp}.csv")
         )
+
+        try:
+            self.generate_charts(timestamp=timestamp)
+        except Exception as e:
+            logging.exception(f"Chart generation failed but scanner/report generation will continue: {e}")
+
+    def generate_charts(self, timestamp: str):
+        """Generates PNG charts from the local database without affecting scan progress."""
+        logging.info("--- Generating PNG charts ---")
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            from matplotlib.ticker import FuncFormatter, MaxNLocator
+        except ImportError as e:
+            logging.error(f"Matplotlib is not available; skipping chart generation: {e}")
+            return
+
+        os.makedirs(REPORTS_DIR, exist_ok=True)
+        capacity_data = self._build_pool_capacity_chart_data()
+        utxo_data = self._build_total_utxo_chart_data()
+
+        if capacity_data:
+            capacity_path = os.path.join(REPORTS_DIR, f"whirlpool_capacity_chart_{timestamp}.png")
+            self._write_capacity_chart(plt, FuncFormatter, MaxNLocator, capacity_data, capacity_path)
+        else:
+            logging.info("No pool capacity data available for chart generation.")
+
+        if utxo_data:
+            utxo_path = os.path.join(REPORTS_DIR, f"whirlpool_utxo_chart_{timestamp}.png")
+            self._write_utxo_chart(plt, FuncFormatter, MaxNLocator, utxo_data, utxo_path)
+        else:
+            logging.info("No UTXO count data available for chart generation.")
+
+    def _build_pool_capacity_chart_data(self) -> Optional[Dict[str, Any]]:
+        self.db_manager.cursor.execute("""
+            SELECT t.block_height AS block, u.pool_name, u.value_sats
+            FROM anonymity_set_utxos u JOIN whirlpool_txs t ON u.txid = t.txid
+            UNION ALL
+            SELECT spent_in_block_height AS block, pool_name, -value_sats AS value_sats
+            FROM anonymity_set_utxos
+            WHERE is_spent = 1 AND spent_in_block_height IS NOT NULL
+        """)
+        events = [row for row in self.db_manager.cursor.fetchall() if row['block'] is not None]
+        if not events:
+            return None
+
+        events.sort(key=lambda x: x['block'])
+        pool_names = sorted(GENESIS_TXS.keys())
+        cumulative = {pool: 0 for pool in pool_names}
+        blocks = []
+        series = {pool: [] for pool in pool_names}
+        idx = 0
+
+        while idx < len(events):
+            block = events[idx]['block']
+            while idx < len(events) and events[idx]['block'] == block:
+                pool = events[idx]['pool_name']
+                if pool in cumulative:
+                    cumulative[pool] += events[idx]['value_sats']
+                idx += 1
+
+            blocks.append(block)
+            for pool in pool_names:
+                series[pool].append(cumulative[pool] / SATOSHIS_PER_BTC)
+
+        return {"blocks": blocks, "series": series}
+
+    def _build_total_utxo_chart_data(self) -> Optional[Dict[str, List[int]]]:
+        self.db_manager.cursor.execute("""
+            SELECT t.block_height AS block, 1 AS utxo_delta
+            FROM anonymity_set_utxos u JOIN whirlpool_txs t ON u.txid = t.txid
+            UNION ALL
+            SELECT spent_in_block_height AS block, -1 AS utxo_delta
+            FROM anonymity_set_utxos
+            WHERE is_spent = 1 AND spent_in_block_height IS NOT NULL
+        """)
+        events = [row for row in self.db_manager.cursor.fetchall() if row['block'] is not None]
+        if not events:
+            return None
+
+        events.sort(key=lambda x: x['block'])
+        blocks = []
+        total_utxos = []
+        cumulative = 0
+        idx = 0
+
+        while idx < len(events):
+            block = events[idx]['block']
+            while idx < len(events) and events[idx]['block'] == block:
+                cumulative += events[idx]['utxo_delta']
+                idx += 1
+
+            blocks.append(block)
+            total_utxos.append(cumulative)
+
+        return {"blocks": blocks, "total_utxos": total_utxos}
+
+    def _style_chart(self, ax, title: str, ylabel: str, MaxNLocator):
+        ax.set_title(title, fontsize=18, fontweight="bold", pad=18)
+        ax.set_xlabel("Block Height", fontsize=12, labelpad=10)
+        ax.set_ylabel(ylabel, fontsize=12, labelpad=10)
+        ax.grid(True, which="major", axis="y", color="#d8dde6", linewidth=1.0)
+        ax.grid(True, which="major", axis="x", color="#eef1f5", linewidth=0.6, alpha=0.7)
+        ax.set_facecolor("#fbfcfe")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_color("#aab2bd")
+        ax.spines["bottom"].set_color("#aab2bd")
+        ax.tick_params(axis="both", labelsize=10, colors="#2d3748")
+        ax.xaxis.set_major_locator(MaxNLocator(nbins=10, integer=True))
+        ax.yaxis.set_major_locator(MaxNLocator(nbins=8))
+        ax.margins(x=0.01)
+
+    def _write_capacity_chart(self, plt, FuncFormatter, MaxNLocator, chart_data: Dict[str, Any], filename: str):
+        blocks = chart_data["blocks"]
+        series = chart_data["series"]
+        labels = {
+            "0.25_BTC_Pool": "0.25 BTC Pool",
+            "0.025_BTC_Pool": "0.025 BTC Pool",
+        }
+        colors = {
+            "0.25_BTC_Pool": "#2563eb",
+            "0.025_BTC_Pool": "#dc2626",
+        }
+
+        fig, ax = plt.subplots(figsize=(14, 7), dpi=160)
+        fig.patch.set_facecolor("white")
+        for pool_name, values in series.items():
+            color = colors.get(pool_name, "#4b5563")
+            ax.plot(blocks, values, drawstyle="steps-post", linewidth=2.5, color=color, label=labels.get(pool_name, pool_name))
+            ax.fill_between(blocks, values, step="post", alpha=0.08, color=color)
+
+        self._style_chart(ax, "Whirlpool Unspent Capacity by Pool", "Unspent Capacity (BTC)", MaxNLocator)
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{value:,.2f}"))
+        ax.legend(loc="upper right", frameon=True, facecolor="white", edgecolor="#d8dde6")
+        fig.tight_layout()
+        fig.savefig(filename, bbox_inches="tight")
+        plt.close(fig)
+        logging.info(f"Capacity chart saved to {filename}")
+
+    def _write_utxo_chart(self, plt, FuncFormatter, MaxNLocator, chart_data: Dict[str, List[int]], filename: str):
+        blocks = chart_data["blocks"]
+        total_utxos = chart_data["total_utxos"]
+        color = "#16a34a"
+
+        fig, ax = plt.subplots(figsize=(14, 7), dpi=160)
+        fig.patch.set_facecolor("white")
+        ax.plot(blocks, total_utxos, drawstyle="steps-post", linewidth=2.5, color=color, label="Total Unspent UTXOs")
+        ax.fill_between(blocks, total_utxos, step="post", alpha=0.10, color=color)
+
+        self._style_chart(ax, "Whirlpool Total Unspent UTXO Count", "Unspent UTXOs", MaxNLocator)
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda value, _: f"{int(value):,}"))
+        ax.legend(loc="upper right", frameon=True, facecolor="white", edgecolor="#d8dde6")
+        fig.tight_layout()
+        fig.savefig(filename, bbox_inches="tight")
+        plt.close(fig)
+        logging.info(f"UTXO chart saved to {filename}")
 
     def generate_report(self, interval=1000, output_file=None):
         logging.info(f"--- Generating Chart-Ready Time-Series Report (Interval: {interval} blocks) ---")

@@ -2,7 +2,7 @@
 
 Docker-first fork of **Ashi Whirlpool Analysis**, a Python-based tool for tracing Whirlpool CoinJoin transaction lineage on the Bitcoin blockchain.
 
-This fork is intended to run isolated in Docker on a server. It tracks the 0.25 BTC and 0.025 BTC Whirlpool pools, stores scan state in a bind-mounted SQLite database, and automatically refreshes CSV reports when the scanner catches up to the blockchain tip and after each 12-hour recheck.
+This fork is intended to run isolated in Docker on a server. It tracks the 0.25 BTC and 0.025 BTC Whirlpool pools, stores scan state in a bind-mounted SQLite database, and automatically refreshes CSV reports and PNG charts when the scanner catches up to the blockchain tip and after each 12-hour recheck.
 
 ---
 
@@ -21,6 +21,7 @@ This project is based on the original work by **Ziya Sadr**:
 * **Whirlpool Detection:** Tracks valid 5-input, 5-output Whirlpool-style CoinJoin descendants that spend tracked anonymity-set UTXOs from a single pool.
 * **Anonymity Set Tracking:** Marks tracked UTXOs as spent and adds outputs from valid descendant mixes back into the tracked anonymity set.
 * **Automatic Reporting:** Writes refreshed CSV reports to `./reports` whenever the scanner reaches the blockchain tip and after every 12-hour recheck.
+* **Automatic Charting:** Writes refreshed PNG charts to `./reports` after report generation. Chart failures are logged and do not stop scanning or CSV report generation.
 
 ---
 
@@ -111,22 +112,30 @@ This removes the container and default Docker network, but it does not delete `.
 
 ---
 
-## Reports
+## Reports and Charts
 
-Reports are generated automatically by the running scanner.
+Reports and charts are generated automatically by the running scanner.
 
 When the scanner reaches the current blockchain tip, it will:
 
-1. Delete old generated report CSV files from `./reports`.
-2. Generate a new simple report.
-3. Generate a new detailed report.
-4. Sleep for 12 hours.
-5. Recheck the blockchain tip and repeat the report refresh after it catches up again.
+1. Delete old generated CSV and PNG files from `./reports`.
+2. Generate a new simple CSV report.
+3. Generate a new detailed CSV report.
+4. Generate a new combined pool capacity PNG chart.
+5. Generate a new total unspent UTXO count PNG chart.
+6. Sleep for 12 hours.
+7. Recheck the blockchain tip and repeat the report/chart refresh after it catches up again.
 
-Generated report files use these filename patterns:
+Generated files use these filename patterns:
 
 * `whirlpool_simplereport_YYYYMMDD_HHMMSS.csv`
 * `whirlpool_report_YYYYMMDD_HHMMSS.csv`
+* `whirlpool_capacity_chart_YYYYMMDD_HHMMSS.png`
+* `whirlpool_utxo_chart_YYYYMMDD_HHMMSS.png`
+
+The capacity chart has block height increasing left-to-right on the x-axis and shows the 0.25 BTC pool and 0.025 BTC pool as separate colored lines on the same chart. The UTXO chart shows total unspent tracked UTXO count over increasing block height.
+
+PNG chart generation is intentionally isolated inside error handling. If chart rendering fails for any reason, the scanner and CSV report refresh continue running.
 
 ---
 
@@ -144,7 +153,7 @@ docker compose run --rm ashi-whirlpool stats
 
 * `Dockerfile`: builds the isolated runtime image.
 * `docker-compose.yml`: defines the service and bind mounts `./data` and `./reports`.
-* `requirements.txt`: lists runtime dependencies.
+* `requirements.txt`: lists runtime dependencies, including `matplotlib` for PNG chart rendering.
 * `.dockerignore`: keeps local databases, reports, virtualenvs, and cache files out of the Docker build context.
 * `data/.gitkeep`: keeps the persistent data directory in the repository.
 * `reports/.gitkeep`: keeps the report output directory in the repository.
