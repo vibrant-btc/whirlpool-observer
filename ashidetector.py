@@ -365,7 +365,10 @@ class WhirlpoolTracer:
                     self.db_manager.update_progress('last_processed_block_height', height)
                     
                     if height % 100 == 0:
-                        logging.info(f"--- Progress: Reached block {height}/{tip_height} ---")
+                        total_scan_blocks = max(tip_height - self.start_block_height, 1)
+                        processed_scan_blocks = max(height - self.start_block_height, 0)
+                        progress_pct = min((processed_scan_blocks / total_scan_blocks) * 100, 100)
+                        logging.info(f"--- Progress: Reached block {height}/{tip_height} ({progress_pct:.2f}%) ---")
 
 
         except KeyboardInterrupt:
