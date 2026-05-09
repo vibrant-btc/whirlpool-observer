@@ -14,14 +14,6 @@ This project is based on the original work by **Ziya Sadr**:
 
 ---
 
-## Repository
-
-Current fork:
-
-* <https://github.com/vibrant-btc/whirlpool-observer>
-
----
-
 ## How It Works
 
 * **Blockchain Sync:** Fetches Bitcoin transaction and raw block data from a mempool.space-compatible REST API.
@@ -323,6 +315,10 @@ docker compose run --rm whirlpool-observer stats
 * `reports/.gitkeep`: keeps the report output directory in the repository.
 
 ---
+
+## Sample DB
+
+/assets/whirlpool.db contains a sample synced database upto Blockheight 948,651 which you may use for testing. It is reccomended that you scan the blockchain yourself however.
 
 ## License
 
