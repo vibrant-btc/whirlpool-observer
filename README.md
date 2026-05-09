@@ -16,7 +16,8 @@ This project is based on the original work by **Ziya Sadr**:
 
 ## How It Works
 
-* **Blockchain Sync:** Fetches Bitcoin transaction and raw block data from the public [blockstream.info](https://blockstream.info) API.
+* **Blockchain Sync:** Fetches Bitcoin transaction and raw block data from a mempool.space-compatible REST API.
+* **Configurable API Source:** Uses the public `https://mempool.space/api` endpoint by default, but can be pointed at any self-hosted mempool.space API URL.
 * **Local Database:** Stores sync progress, Whirlpool transactions, and tracked UTXOs in `./data/whirlpool.db` on the host.
 * **Whirlpool Detection:** Tracks valid 5-input, 5-output Whirlpool-style CoinJoin descendants that spend tracked anonymity-set UTXOs from a single pool.
 * **Anonymity Set Tracking:** Marks tracked UTXOs as spent and adds outputs from valid descendant mixes back into the tracked anonymity set.
@@ -25,11 +26,31 @@ This project is based on the original work by **Ziya Sadr**:
 
 ---
 
-## API Keys
+## Blockchain Data Source
 
 No API keys are required.
 
-The tool uses the public unauthenticated `https://blockstream.info/api` endpoints. The existing `apikey` file is not used by the code and can be ignored.
+The tool uses a mempool.space-compatible REST API for blockchain data. By default it uses:
+
+```bash
+https://mempool.space/api
+```
+
+You can point it at your own self-hosted mempool.space instance by setting `MEMPOOL_API_URL` to the full API base URL, including `/api`.
+
+Examples:
+
+```bash
+MEMPOOL_API_URL=https://mymempool.example.com/api
+MEMPOOL_API_URL=http://192.168.1.50:4080/api
+```
+
+The scanner uses these mempool.space-compatible endpoints:
+
+* `/blocks/tip/height` to get the current chain tip height.
+* `/block-height/:height` to resolve a block height to a block hash.
+* `/block/:hash/raw` to download the complete raw binary block.
+* `/tx/:txid` to fetch the known genesis transaction metadata and outputs.
 
 ---
 
@@ -59,6 +80,30 @@ From the repository root:
 ```bash
 docker compose build
 ```
+
+---
+
+## Configure a Self-Hosted mempool.space API
+
+The default API URL is set in `docker-compose.yml` as:
+
+```yaml
+MEMPOOL_API_URL: ${MEMPOOL_API_URL:-https://mempool.space/api}
+```
+
+To use your own self-hosted mempool.space instance for one run, pass the variable before Docker Compose:
+
+```bash
+MEMPOOL_API_URL=https://mymempool.example.com/api docker compose up -d
+```
+
+For a persistent local setting, create a `.env` file beside `docker-compose.yml`:
+
+```bash
+MEMPOOL_API_URL=https://mymempool.example.com/api
+```
+
+Then start normally with `docker compose up -d`.
 
 ---
 
@@ -152,7 +197,7 @@ docker compose run --rm ashi-whirlpool stats
 ## Files Added for Docker
 
 * `Dockerfile`: builds the isolated runtime image.
-* `docker-compose.yml`: defines the service and bind mounts `./data` and `./reports`.
+* `docker-compose.yml`: defines the service, bind mounts `./data` and `./reports`, and exposes the configurable `MEMPOOL_API_URL` setting.
 * `requirements.txt`: lists runtime dependencies, including `matplotlib` for PNG chart rendering.
 * `.dockerignore`: keeps local databases, reports, virtualenvs, and cache files out of the Docker build context.
 * `data/.gitkeep`: keeps the persistent data directory in the repository.

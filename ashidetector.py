@@ -12,7 +12,7 @@ from bitcoin.core import CBlock
 DATA_DIR = os.environ.get("WHIRLPOOL_DATA_DIR", ".")
 REPORTS_DIR = os.environ.get("WHIRLPOOL_REPORTS_DIR", ".")
 DB_FILE = os.environ.get("WHIRLPOOL_DB_FILE", os.path.join(DATA_DIR, "whirlpool.db"))
-API_BASE_URL = "https://blockstream.info/api"
+MEMPOOL_API_BASE_URL = os.environ.get("MEMPOOL_API_URL", "https://mempool.space/api").rstrip("/")
 RETRY_ATTEMPTS = 5
 RETRY_DELAY_SECONDS = 5
 PROCESS_LOOP_DELAY_SECONDS = 60 * 60 * 12  # 12 hours
@@ -157,17 +157,11 @@ class DatabaseManager:
     def close(self):
         self.conn.close()
 
-# --- Blockstream API Client ---
-class BlockstreamClient:
+# --- Mempool API Client ---
+class MempoolClient:
     def __init__(self):
-        self.base_url = API_BASE_URL
-        self._log_api_key_status()
-
-    def _log_api_key_status(self):
-        if os.path.exists("apikey"):
-            logging.info("Found 'apikey' file. Note: The public blockstream.info API does not use authentication.")
-        else:
-            logging.info("No 'apikey' file found. Proceeding with unauthenticated public API.")
+        self.base_url = MEMPOOL_API_BASE_URL
+        logging.info(f"Using mempool.space-compatible API base URL: {self.base_url}")
 
     def _request(self, endpoint: str, is_json=True) -> Optional[Any]:
         url = f"{self.base_url}/{endpoint}"
@@ -207,7 +201,7 @@ class BlockstreamClient:
 class WhirlpoolTracer:
     def __init__(self, fresh_start: bool = False):
         self.db_manager = DatabaseManager(DB_FILE)
-        self.client = BlockstreamClient()
+        self.client = MempoolClient()
         self.start_block_height = self._get_earliest_genesis_block_height()
         self.db_manager.setup_db(self.start_block_height, fresh_start)
 
