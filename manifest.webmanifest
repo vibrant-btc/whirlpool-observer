@@ -10,13 +10,13 @@
   "orientation": "any",
   "icons": [
     {
-      "src": "/assets/Ashigaru_Whirlpool_Logo_White.png",
+      "src": "/assets/Ashigaru_Whirlpool_Logo_White_On_Black_Square.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/assets/Ashigaru_Whirlpool_Logo_White.png",
+      "src": "/assets/Ashigaru_Whirlpool_Logo_White_On_Black_Square.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
