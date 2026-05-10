@@ -223,6 +223,7 @@ The dashboard provides live, interactive visual analysis while the scanner is ru
 * Pure-black dashboard theme.
 * Favicon loaded from `assets/Ashigaru_Whirlpool_Logo_White.png`.
 * Logo displayed next to the Whirlpool.Observer title.
+* Progressive Web App support
 * Open Graph and Twitter/X social preview cards using `assets/social.png`.
 * Sync/scanning progress without needing to read logs.
 * “Synced to blockheight” state and next update countdown after initial sync.

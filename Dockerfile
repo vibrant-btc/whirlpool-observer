@@ -18,6 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ashidetector.py ./
 COPY observer.html ./observer.html.template
+COPY manifest.webmanifest ./
+COPY sw.js ./
 COPY assets ./assets
 
 RUN WHIRLPOOL_PUBLIC_URL="$WHIRLPOOL_PUBLIC_URL" WHIRLPOOL_ONION_LOCATION="$WHIRLPOOL_ONION_LOCATION" python - <<'PY'

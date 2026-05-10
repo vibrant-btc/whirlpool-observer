@@ -852,6 +852,16 @@ class WhirlpoolTracer:
             with open(template_path, "r", encoding="utf-8") as template_file:
                 return template_file.read()
 
+        @app.route("/manifest.webmanifest")
+        def manifest():
+            app_dir = os.path.dirname(os.path.abspath(__file__))
+            return send_from_directory(app_dir, "manifest.webmanifest", mimetype="application/manifest+json")
+
+        @app.route("/sw.js")
+        def service_worker():
+            app_dir = os.path.dirname(os.path.abspath(__file__))
+            return send_from_directory(app_dir, "sw.js", mimetype="application/javascript")
+
         @app.route("/assets/<path:filename>")
         def assets(filename):
             assets_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
@@ -913,7 +923,7 @@ class WhirlpoolTracer:
         for pool in sorted(GENESIS_TXS.keys()):
             unspent = self.db_manager.query_one("SELECT COUNT(*) AS count, COALESCE(SUM(value_sats),0) AS sats FROM anonymity_set_utxos WHERE pool_name=? AND is_spent=0", (pool,))
             cycles = self.db_manager.query_one("SELECT COUNT(*) AS count FROM whirlpool_txs WHERE pool_name=?", (pool,))
-            entered = self.db_manager.query_one("SELECT COUNT(*) AS tx0s, COALESCE(SUM(entered_capacity_sats),0) AS sats, AVG(fee_efficiency_pct) AS avg_fee_eff FROM tx0s WHERE pool_name=?", (pool,))
+            entered = self.db_manager.query_one("SELECT COUNT(*) AS tx0s, COALESCE(SUM(entered_capacity_sats),0) AS sats, COALESCE(SUM(premix_output_count),0) AS entered_utxos, AVG(fee_efficiency_pct) AS avg_fee_eff FROM tx0s WHERE pool_name=?", (pool,))
             pools.append({
                 "pool": pool,
                 "label": POOL_LABELS.get(pool, pool),
@@ -921,6 +931,7 @@ class WhirlpoolTracer:
                 "unspent_btc": (unspent["sats"] or 0) / SATOSHIS_PER_BTC,
                 "unspent_utxos": unspent["count"] or 0,
                 "entered_btc": (entered["sats"] or 0) / SATOSHIS_PER_BTC,
+                "entered_utxos": entered["entered_utxos"] or 0,
                 "tx0_count": entered["tx0s"] or 0,
                 "avg_fee_efficiency_pct": entered["avg_fee_eff"] or 0,
                 "cycles": cycles["count"] or 0,
@@ -1035,7 +1046,7 @@ WHIRLPOOL_OBSERVER_HTML = r"""
 <div class="grid cards"><div class="card"><div class="label">Sync progress</div><div class="value" id="progressValue">0%</div><div class="progress"><div class="bar" id="progressBar" style="width:0%"></div></div><div class="small" id="heightText"></div></div><div class="card"><div class="label">Total unspent</div><div class="value" id="totalUnspent">0 BTC</div></div><div class="card"><div class="label">Total entered</div><div class="value" id="totalEntered">0 BTC</div></div><div class="card"><div class="label">Total cycles</div><div class="value" id="totalCycles">0</div></div></div>
 <div class="grid poolcards" id="poolCards"></div>
 <div class="grid charts"><div class="chart"><h2>0.25 BTC Pool: Entered vs Unspent</h2><canvas id="donut0250" height="220"></canvas></div><div class="chart"><h2>0.025 BTC Pool: Entered vs Unspent</h2><canvas id="donut0025" height="220"></canvas></div></div>
-<div class="grid charts"><div class="chart"><h2>Total Entered Capacity by Pool</h2><canvas id="enteredChart" height="130"></canvas></div><div class="chart"><h2>Live Unspent Capacity by Pool</h2><canvas id="lineChart" height="130"></canvas></div></div>
+<div class="grid charts"><div class="chart"><h2>Total Entered Capacity by Pool</h2><canvas id="enteredChart" height="130"></canvas></div><div class="chart"><h2>Unspent Capacity by Pool</h2><canvas id="lineChart" height="130"></canvas></div></div>
 <div class="grid charts"><div class="chart"><h2>Total Unspent UTXOs</h2><canvas id="utxoChart" height="150"></canvas></div><div class="chart"><h2>Current Unspent Pool Breakdown</h2><canvas id="poolBreakdown" height="220"></canvas></div></div>
 <div class="table" style="margin-top:14px"><div class="table-head"><h2>Whirlpool Cycles</h2><div><div class="toggles" id="poolToggles"></div><div class="pager"><button id="prevPage">Prev</button><span id="pageText">Page 1</span><button id="nextPage">Next</button></div></div></div><div class="table-scroll desktop-table"><table><thead><tr><th>Height</th><th>Pool</th><th>TXID</th></tr></thead><tbody id="txRows"></tbody></table></div><div id="txCards"></div></div></div>
 <script>

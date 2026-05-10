@@ -1,0 +1,25 @@
+{
+  "name": "Whirlpool.Observer",
+  "short_name": "Whirlpool.Observer",
+  "description": "Explore Ashigaru Whirlpool CoinJoin cycle history and TX0 activity.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/assets/Ashigaru_Whirlpool_Logo_White.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/Ashigaru_Whirlpool_Logo_White.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
