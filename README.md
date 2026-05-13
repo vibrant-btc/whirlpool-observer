@@ -1,6 +1,4 @@
 <div align="center">
-  <br>
-  <br>
   <h1>Whirlpool.Observer</h1>
   <p>
     <strong>A self-hostable Bitcoin blockchain reader for Whirlpool activity.</strong>
