@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ashidetector.py ./
 COPY observer.html ./observer.html.template
+COPY explainer.md ./
 COPY manifest.webmanifest ./
 COPY sw.js ./
 COPY assets ./assets

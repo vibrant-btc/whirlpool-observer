@@ -19,9 +19,12 @@ services:
       WHIRLPOOL_WEB_HOST: 0.0.0.0
       WHIRLPOOL_WEB_PORT: 8080
       WHIRLPOOL_RESCAN_HOURS: ${WHIRLPOOL_RESCAN_HOURS:-12}
-      # Set this to your own self-hosted mempool.space-compatible API URL.
-      # Examples: https://mempool.space/api, https://mymempool.example.com/api, http://192.168.1.50:4080/api
+      # Set this to your own self-hosted mempool.space-compatible or Blockstream/Esplora-compatible API URL.
+      # Examples: https://mempool.space/api, https://mymempool.example.com/api, https://blockstream.info/api, http://192.168.1.50:4080/api
       MEMPOOL_API_URL: ${MEMPOOL_API_URL:-https://mempool.space/api}
+      # Used automatically when MEMPOOL_API_URL cannot return required blockchain data.
+      # This can be another mempool.space-compatible API or a Blockstream/Esplora-compatible API.
+      MEMPOOL_FALLBACK_API_URL: ${MEMPOOL_FALLBACK_API_URL:-https://blockstream.info/api}
     ports:
       - "${WHIRLPOOL_WEB_PORT:-8080}:8080"
     volumes:
