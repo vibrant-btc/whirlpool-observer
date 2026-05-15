@@ -43,37 +43,71 @@ The web dashboard shows:
 
 ## Quick start
 
-### 1. Build
+### Option A: run the published GHCR image with Docker Compose
 
-```bash
-docker compose build
+Create a `docker-compose.yml` file like this:
+
+```yaml
+services:
+  whirlpool-observer:
+    image: ghcr.io/vibrant-btc/whirlpool-observer:latest
+    container_name: whirlpool-observer
+    restart: unless-stopped
+    init: true
+    environment:
+      WHIRLPOOL_DATA_DIR: /data
+      WHIRLPOOL_REPORTS_DIR: /reports
+      WHIRLPOOL_WEB_HOST: 0.0.0.0
+      WHIRLPOOL_WEB_PORT: 8080
+      WHIRLPOOL_RESCAN_HOURS: ${WHIRLPOOL_RESCAN_HOURS:-12}
+      MEMPOOL_API_URL: ${MEMPOOL_API_URL:-https://mempool.space/api}
+      MEMPOOL_FALLBACK_API_URL: ${MEMPOOL_FALLBACK_API_URL:-https://blockstream.info/api}
+    ports:
+      - "${WHIRLPOOL_WEB_PORT:-8080}:8080"
+    volumes:
+      - ./data:/data
+      - ./reports:/reports
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "64k"
+        max-file: "1"
+    command: ["run"]
 ```
 
-### 2. Run
+Then pull and run the published image:
 
 ```bash
+docker compose pull
 docker compose up -d
 ```
 
-### 3. Open
+### Option B: build locally with Docker Compose
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+### Open the dashboard
 
 ```text
 http://localhost:8080
 ```
 
-### 4. View logs
+### View logs
 
 ```bash
 docker compose logs -f whirlpool-observer
 ```
 
-### 5. Stop
+### Stop
 
 ```bash
 docker compose stop
 ```
 
-### 6. Remove container/network but keep data
+### Remove container/network but keep data
 
 ```bash
 docker compose down
@@ -156,7 +190,7 @@ For a more readable explanation, read [Explainer](explainer.md).
 
 Whirlpool.Observer is free and open-source. Donations are optional and appreciated.
 
-Finde more info in [Whirlpool.Observer's Footer](https://whirlpool.observer).
+Find more info in [Whirlpool.Observer's Footer](https://whirlpool.observer).
 
 ---
 
