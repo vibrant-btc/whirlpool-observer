@@ -1,0 +1,45 @@
+FROM python:3.12-slim
+
+ARG WHIRLPOOL_PUBLIC_URL=http://localhost:8080
+ARG WHIRLPOOL_ONION_LOCATION=
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    WHIRLPOOL_DATA_DIR=/data \
+    WHIRLPOOL_REPORTS_DIR=/reports \
+    WHIRLPOOL_WEB_HOST=0.0.0.0 \
+    WHIRLPOOL_WEB_PORT=8080 \
+    WHIRLPOOL_RESCAN_HOURS=12
+
+WORKDIR /app
+
+COPY requirements-server.txt ./
+RUN pip install --no-cache-dir -r requirements-server.txt
+
+COPY ashidetector.py ./
+COPY observer.html ./observer.html.template
+COPY explainer.md ./
+COPY manifest.webmanifest ./
+COPY sw.js ./
+COPY assets ./assets
+
+RUN WHIRLPOOL_PUBLIC_URL="$WHIRLPOOL_PUBLIC_URL" WHIRLPOOL_ONION_LOCATION="$WHIRLPOOL_ONION_LOCATION" python - <<'PY'
+from pathlib import Path
+import os
+public_url = os.environ.get('WHIRLPOOL_PUBLIC_URL', '').rstrip('/') or 'http://localhost:8080'
+onion_location = os.environ.get('WHIRLPOOL_ONION_LOCATION', '').strip()
+observer = Path('/app/observer.html.template').read_text()
+observer = observer.replace('__BASE_URL__', public_url)
+Path('/app/observer.html').write_text(observer)
+app = Path('/app/ashidetector.py').read_text()
+app = app.replace('__WHIRLPOOL_ONION_LOCATION__', onion_location)
+Path('/app/ashidetector.py').write_text(app)
+Path('/app/observer.html.template').unlink()
+PY
+
+RUN mkdir -p /data /reports
+
+EXPOSE 8080
+
+ENTRYPOINT ["python", "ashidetector.py"]
+CMD ["run"]

@@ -75,6 +75,14 @@ services:
     command: ["run"]
 ```
 
+A smaller server image is also available:
+
+```yaml
+image: ghcr.io/vibrant-btc/whirlpool-observer:latest-server
+```
+
+The server image does not include `matplotlib`, so it is smaller. The live dashboard still works, but static PNG chart generation in ./reports is skipped.
+
 Then pull and run the published image:
 
 ```bash
@@ -84,10 +92,24 @@ docker compose up -d
 
 ### Option B: build locally with Docker Compose
 
+The included `docker-compose.yml` builds the full local image with `matplotlib` by default:
+
 ```bash
 docker compose build
 docker compose up -d
 ```
+
+To build the smaller local server variant without `matplotlib`, use `Dockerfile.server`:
+
+```bash
+WHIRLPOOL_DOCKERFILE=Dockerfile.server \
+WHIRLPOOL_LOCAL_IMAGE=whirlpool-observer:server \
+docker compose build
+
+WHIRLPOOL_LOCAL_IMAGE=whirlpool-observer:server docker compose up -d
+```
+
+The server variant keeps the scanner and live dashboard working, but static PNG chart generation in `./reports` is skipped because `matplotlib` is not installed.
 
 ### Open the dashboard
 

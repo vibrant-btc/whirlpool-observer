@@ -2,6 +2,7 @@ services:
   whirlpool-observer:
     build:
       context: .
+      dockerfile: ${WHIRLPOOL_DOCKERFILE:-Dockerfile}
       args:
         # Hardcoded at image build time for absolute social-card metadata.
         # Set this only when publicly exposing the service.
@@ -9,7 +10,7 @@ services:
         # Hardcoded at image build time for Tor Browser's Onion-Location header.
         # Leave empty unless publicly exposing an onion service.
         WHIRLPOOL_ONION_LOCATION: ${WHIRLPOOL_ONION_LOCATION:-}
-    image: whirlpool-observer:latest
+    image: ${WHIRLPOOL_LOCAL_IMAGE:-whirlpool-observer:latest}
     container_name: whirlpool-observer
     restart: unless-stopped
     init: true
