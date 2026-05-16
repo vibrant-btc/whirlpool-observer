@@ -20,6 +20,8 @@ services:
       WHIRLPOOL_WEB_HOST: 0.0.0.0
       WHIRLPOOL_WEB_PORT: 8080
       WHIRLPOOL_RESCAN_HOURS: ${WHIRLPOOL_RESCAN_HOURS:-12}
+      # Comma-separated browser origins allowed to read the public JSON API from another site.
+      WHIRLPOOL_CORS_ORIGINS: "${WHIRLPOOL_CORS_ORIGINS:-https://bitcoinprivacy.wiki,https://www.bitcoinprivacy.wiki}"
       # Set this to your own self-hosted mempool.space-compatible or Blockstream/Esplora-compatible API URL.
       # Examples: https://mempool.space/api, https://mymempool.example.com/api, https://blockstream.info/api, http://192.168.1.50:4080/api
       MEMPOOL_API_URL: ${MEMPOOL_API_URL:-https://mempool.space/api}

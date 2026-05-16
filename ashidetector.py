@@ -26,6 +26,15 @@ WEB_PORT = int(os.environ.get("WHIRLPOOL_WEB_PORT", "8080"))
 ONION_LOCATION = "__WHIRLPOOL_ONION_LOCATION__".strip()
 if ONION_LOCATION.startswith("__"):
     ONION_LOCATION = ""
+CORS_ORIGINS = [
+    origin.strip().rstrip("/")
+    for origin in os.environ.get(
+        "WHIRLPOOL_CORS_ORIGINS",
+        "https://bitcoinprivacy.wiki,https://www.bitcoinprivacy.wiki",
+    ).split(",")
+    if origin.strip()
+]
+CORS_ALLOW_ALL = "*" in CORS_ORIGINS
 RESCAN_INTERVAL_HOURS = float(os.environ.get("WHIRLPOOL_RESCAN_HOURS", "12"))
 PROCESS_LOOP_DELAY_SECONDS = max(int(RESCAN_INTERVAL_HOURS * 60 * 60), 60)
 RETRY_ATTEMPTS = 5
@@ -1314,11 +1323,22 @@ class WhirlpoolTracer:
         tracer = self
 
         @app.after_request
-        def add_no_cache_headers(response):
+        def add_response_headers(response):
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
             response.headers["Surrogate-Control"] = "no-store"
+
+            origin = request.headers.get("Origin", "").rstrip("/")
+            if CORS_ALLOW_ALL:
+                response.headers["Access-Control-Allow-Origin"] = "*"
+            elif origin in CORS_ORIGINS:
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Vary"] = "Origin"
+            if CORS_ALLOW_ALL or origin in CORS_ORIGINS:
+                response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+                response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+
             if ONION_LOCATION:
                 response.headers["Onion-Location"] = ONION_LOCATION
             return response
