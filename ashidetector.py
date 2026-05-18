@@ -568,20 +568,24 @@ class MempoolClient:
         response = self._request_until_success(f"block/{block_hash}/raw", is_json=False)
         return response.content
 
-    def get_transaction(self, txid: str) -> Dict[str, Any]:
+    def get_transaction(self, txid: str, force_refresh: bool = False) -> Dict[str, Any]:
         cached = self.tx_cache.get(txid)
-        if cached is not None:
+        if cached is not None and not force_refresh:
             logging.info(f"Using cached transaction details for {txid}; no REST API call needed.")
             return cached
+        if cached is not None and force_refresh:
+            logging.info(f"Refreshing cached transaction details for {txid} from the REST API.")
         tx = self._request_until_success(f"tx/{txid}", is_json=True)
         self.tx_cache[txid] = tx
         return tx
 
-    def get_outspends(self, txid: str) -> List[Dict[str, Any]]:
+    def get_outspends(self, txid: str, force_refresh: bool = False) -> List[Dict[str, Any]]:
         cached = self.outspends_cache.get(txid)
-        if cached is not None:
+        if cached is not None and not force_refresh:
             logging.info(f"Using cached outspends for TX0 {txid}; no REST API call needed.")
             return cached
+        if cached is not None and force_refresh:
+            logging.info(f"Refreshing cached outspends for TX0 {txid} from the REST API.")
         outspends = self._request_until_success(f"tx/{txid}/outspends", is_json=True, base_urls=self.outspends_urls)
         self.outspends_cache[txid] = outspends
         return outspends
@@ -766,15 +770,18 @@ class WhirlpoolTracer:
             prev_vout = vin.get("vout")
             if prev_txid is None or prev_vout is None:
                 continue
-            parent_utxo = self.db_manager.get_unspent_utxo_by_id(f"{prev_txid}:{int(prev_vout)}")
-            if parent_utxo:
+            parent_utxo = self.db_manager.get_any_utxo_by_id(f"{prev_txid}:{int(prev_vout)}")
+            if parent_utxo and (not parent_utxo["is_spent"] or parent_utxo["spent_in_txid"] == txid):
                 tracked_inputs[idx] = parent_utxo
                 tracked_pools.add(parent_utxo["pool_name"])
 
         if tracked_inputs:
             for utxo in tracked_inputs.values():
-                self.db_manager.mark_utxo_as_spent(utxo["output_id"], txid, int(block_height))
-                logging.info(f"Marked tracked anonymity-set UTXO {utxo['output_id']} as spent by future-discovered Whirlpool cycle {txid} at block {block_height}.")
+                if not utxo["is_spent"]:
+                    self.db_manager.mark_utxo_as_spent(utxo["output_id"], txid, int(block_height))
+                    logging.info(f"Marked tracked anonymity-set UTXO {utxo['output_id']} as spent by future-discovered Whirlpool cycle {txid} at block {block_height}.")
+                else:
+                    logging.info(f"Tracked anonymity-set UTXO {utxo['output_id']} was already marked spent by {txid}; reusing it to idempotently record the Whirlpool cycle.")
 
         if tracked_inputs and len(tracked_pools) == 1 and next(iter(tracked_pools)) == pool_name:
             new_utxos = [
@@ -852,7 +859,7 @@ class WhirlpoolTracer:
             remix_utxo = self.db_manager.get_any_utxo_by_id(output_id)
             self._classify_and_record_input(tx_details["txid"], idx, prev_txid, int(prev_vout), pool_name, block_height, remix_utxo, analyze_parent_outspends=analyze_parent_outspends)
 
-    def analyze_tx0_outspends(self, tx0_txid: str, trigger: str = "scanner"):
+    def analyze_tx0_outspends(self, tx0_txid: str, trigger: str = "scanner", force_refresh_outspends: bool = False):
         if tx0_txid in self.tx0_outspends_in_progress:
             logging.info(f"TX0 {tx0_txid} outspends analysis is already in progress; skipping duplicate recursive request triggered by {trigger}.")
             return
@@ -865,7 +872,7 @@ class WhirlpoolTracer:
         logging.info(f"Analyzing outspends for TX0 {tx0_txid} because {trigger}. Premix outputs: {len(outputs)}.")
         self.tx0_outspends_in_progress.add(tx0_txid)
         try:
-            outspends = self.client.get_outspends(tx0_txid)
+            outspends = self.client.get_outspends(tx0_txid, force_refresh=force_refresh_outspends)
             outspend_by_vout = {idx: item for idx, item in enumerate(outspends or [])}
             refresh_block = self.db_manager.get_progress("current_processing_block") or row["block_height"] or 0
 
@@ -884,10 +891,31 @@ class WhirlpoolTracer:
                 spend_txid = outspend.get("txid")
                 spend_vin = outspend.get("vin")
                 spend_status = outspend.get("status", {}) or {}
+                spend_confirmed = bool(spend_status.get("confirmed"))
                 spend_height = spend_status.get("block_height")
                 spend_hash = spend_status.get("block_hash")
-                logging.info(f"TX0 output {output_id} is spent by transaction {spend_txid} input {spend_vin}. Fetching spending transaction from the configured REST API for Whirlpool/non-Whirlpool classification.")
-                spend_tx = self.client.get_transaction(spend_txid)
+                if not spend_confirmed or spend_height is None or not spend_hash:
+                    logging.info(
+                        f"TX0 output {output_id} is spent by unconfirmed transaction {spend_txid} input {spend_vin}. "
+                        "Leaving it counted as unmixed until the spend confirms; interval refresh will force-refresh outspends and classify it later."
+                    )
+                    self.db_manager.update_tx0_output_status(
+                        output_id,
+                        TX0_STATUS_UNMIXED,
+                        "Output has an unconfirmed outspend; waiting for confirmation before Whirlpool/non-Whirlpool classification.",
+                        spend_txid,
+                        spend_vin,
+                        None,
+                        None,
+                        False,
+                        None,
+                        None,
+                        None,
+                    )
+                    continue
+
+                logging.info(f"TX0 output {output_id} is spent by confirmed transaction {spend_txid} input {spend_vin}. Fetching spending transaction from the configured REST API for Whirlpool/non-Whirlpool classification.")
+                spend_tx = self.client.get_transaction(spend_txid, force_refresh=force_refresh_outspends)
                 pool_name = output["pool_name"]
                 if self._is_json_whirlpool_tx_for_pool(spend_tx, pool_name):
                     self._record_whirlpool_from_json_if_needed(spend_tx, pool_name, analyze_parent_outspends=False)
@@ -911,12 +939,16 @@ class WhirlpoolTracer:
         seen_tx0s: Set[str] = set()
         while not STOP_EVENT.is_set():
             rows = self.db_manager.get_unmixed_tx0_outputs(limit=500)
-            tx0s = [row["tx0_txid"] for row in rows if row["tx0_txid"] not in seen_tx0s]
+            tx0s = []
+            for row in rows:
+                tx0_txid = row["tx0_txid"]
+                if tx0_txid not in seen_tx0s and tx0_txid not in tx0s:
+                    tx0s.append(tx0_txid)
             if not tx0s:
                 break
             for tx0_txid in tx0s:
                 seen_tx0s.add(tx0_txid)
-                self.analyze_tx0_outspends(tx0_txid, trigger="interval refresh of unmixed premix outputs")
+                self.analyze_tx0_outspends(tx0_txid, trigger="interval refresh of unmixed premix outputs", force_refresh_outspends=True)
         self.db_manager.refresh_all_tx0_aggregates()
         logging.info("Completed TX0 unmixed-output refresh.")
 
